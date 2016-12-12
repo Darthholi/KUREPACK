@@ -6,30 +6,53 @@ import HesMethods as hmat
 epsconst = 2**(-52)
 
 class FalsSqpObj:
-  #def _init_(self):
+  def _init_(self, pobject_fx, pobject_cx):
+    self.object_fx = pobject_fx
+    self.object_cx = pobject_cx
   def get_fcl(self,INITIAL_STATES_SEGMENTS,LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A,
-              FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST,xlambda)
+              FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST,xlambda):
     
     # Function evaluates the objective function fx, its gradient gfx,
     # vector of constraints cx, its Jacobian Bx
     # Lagrangian L and its gradient with respect to x gxL
     
     # objective function part
-    [fx, gfx] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST)
+    [fx, gfx] = self.object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST)
     
     # vector of constraints part
-    [cx, Bx, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST, ell_I, ell_U, cen_IU)
+    [cx, Bx, T] = self.const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST, ell_I, ell_U, cen_IU)
     
     # Lagrangian part
-    [L, gxL] = lagrangian(fx, gfx, cx, Bx, xlambda)
+    [L, gxL] = self.lagrangian(fx, gfx, cx, Bx, xlambda)
     
     return [fx, gfx, cx, Bx, L, gxL]
+  def lagrangian(self,obj_fun_val, obj_fun_grad, const_val, const_Jac, xlambda):
+    #  Function computes the Lagrangian and its gradient with respect to x
+    #  Lagrangian - lag_val(x, lambda) = F(x) + lambda^T*const_val(x)
+    #  Gradient - lag_grad(x, lambda) = gxF(x) + const_Jac(x)*lambda
+    
+    #  INPUT:
+    #      obj_fun_val - value of the objective function obj_fun_val(x)
+    #      obj_fun_grad - gradient of the objective function gxf(x)
+    #      const_val - vector of constraints const_val(x)
+    #      const_Jac - Jacobian of the constraints const_Jac(x), column-wise
+    #      lambda - vector of Lagrange multipliers
+    
+    #  OUTPUT:
+    #      lag_val - value of the Lagrangian lag_val(x, lambda)
+    #      lag_grad - value of the gradient of the Lagrangian lag_grad(x, lambda)
+
+    #=============================================================================
+    
+    lag_val = obj_fun_val + xlambda*const_val; #todo xlambda'*const_val; transpozice?
+    lag_grad = obj_fun_grad + const_Jac*xlambda;
+    return [lag_val, lag_grad]
   
   def gmerit_fcn(self,direction_x, obj_fun_grad, const_val, const_Jac, xlambda, MERIT_FUNCTION_SIGMA):
     #  Function computes the gradient of a merit function for the step length
     #  selection process
-    #  m = F(x) + lambda^T*const_val(x) + (MERIT_FUNCTION_SIGMA/2)*||const_val(x)||_2^2
-    #  gxm = direction_x^T*(gxF(x) + const_Jac(x)*lambda) + MERIT_FUNCTION_SIGMA*direction_x^T*const_Jac(x)*const_val(x)
+    #  m = F(x) + lambda**T*const_val(x) + (MERIT_FUNCTION_SIGMA/2)*||const_val(x)||_2**2
+    #  gxm = direction_x**T*(gxF(x) + const_Jac(x)*lambda) + MERIT_FUNCTION_SIGMA*direction_x**T*const_Jac(x)*const_val(x)
     
     #  Source: http:#www.cs.cas.cz/luksan/luksan/saddle.ps
     
@@ -50,11 +73,11 @@ class FalsSqpObj:
     #  lambda = lam_o + d_l, x = x_o!!!!!!!!!!!!!!!!!!!!!!!!
     # orig: merit_fun_grad = direction_x'*(obj_fun_grad + const_Jac*lambda) + MERIT_FUNCTION_SIGMA*direction_x'*const_Jac*const_val #todo transpose
     merit_fun_grad = direction_x*(obj_fun_grad + const_Jac*xlambda) + MERIT_FUNCTION_SIGMA*direction_x*const_Jac*const_val #todo transpose like orig:
-    return [merit_fun_grad]
+    return merit_fun_grad
   
   def merit_fcn(self,obj_fun_val, const_val, xlambda, mer_fun_sigma):
     #  Function evaluates the merit function for given x and lambda
-    #  mer_fun_val = F(x) + xlambda^T*const_val(x) + (mer_fun_sigma/2)*||const_val(x)||_2^2
+    #  mer_fun_val = F(x) + xlambda**T*const_val(x) + (mer_fun_sigma/2)*||const_val(x)||_2**2
     
     #  INPUT:
     #      obj_fun_val - value of the objective function F(x)
@@ -69,9 +92,9 @@ class FalsSqpObj:
     
     
     #  Evaluate mer_fun_val(x, lambda)
-    #orig mer_fun_val = obj_fun_val + xlambda'*const_val + 0.5*mer_fun_sigma*norm(const_val)^2;
-    mer_fun_val = obj_fun_val + xlambda*const_val + 0.5*mer_fun_sigma*np.norm(const_val)^2 # todo transposition by orig...
-    return [mer_fun_val]
+    #orig mer_fun_val = obj_fun_val + xlambda'*const_val + 0.5*mer_fun_sigma*norm(const_val)**2;
+    mer_fun_val = obj_fun_val + xlambda*const_val + 0.5*mer_fun_sigma*np.norm(const_val)**2 # todo transposition by orig...
+    return mer_fun_val
   
   def xt_from_s(self,INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, s, PROBLEM_FORMULATION):
     #  Function computes x_new = x_old + a_k*d_x = x_old + s
@@ -92,22 +115,22 @@ class FalsSqpObj:
     #=========================================================================
     
     #  statespace_dimension - state space dimension, number_of_segments - number of segments
-    [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS)
+    [statespace_dimension, number_of_segments] = len(INITIAL_STATES_SEGMENTS)
     
     if (PROBLEM_FORMULATION== 2):
             x_n = matrix(s, statespace_dimension, number_of_segments)
-            si_o = INITIAL_STATES_SEGMENTS + x_n;
-            sl_o = LENGTHS_SEGMENTS;
+            si_o = INITIAL_STATES_SEGMENTS + x_n
+            sl_o = LENGTHS_SEGMENTS
     else:
             xat = matrix(s, statespace_dimension+1, number_of_segments)
-            si_o = INITIAL_STATES_SEGMENTS + xat[1:statespace_dimension,:]
-            sl_o = LENGTHS_SEGMENTS + xat[-1,:];
+            si_o = INITIAL_STATES_SEGMENTS + xat[:statespace_dimension,:]
+            sl_o = LENGTHS_SEGMENTS + xat[-1,:]
     return [si_o, sl_o]
   
   def step(self,INITIAL_STATES_SEGMENTS, direction_x, xlambda, direction_lambda, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, TO_STOP, PROBLEM_FORMULATION, ODE_LIST, MERIT_FUNCTION_SIGMA, mer_fun_val, mer_fun_grad):
     #  Function computes the length of the step size_step so that x_new = x_old + size_step*direction_x
     #  The merit function we use is: 
-    #  number_of_segments(size_step) = F(x+size_step*direction_x) + (lambda + direction_lambda)^T*c(x + size_step*direction_x) + (sigma/2)*||c(x + size_step*direction_x)||_2^2
+    #  number_of_segments(size_step) = F(x+size_step*direction_x) + (lambda + direction_lambda)**T*c(x + size_step*direction_x) + (sigma/2)*||c(x + size_step*direction_x)||_2**2
     
     #  INPUT:
     #      INITIAL_STATES_SEGMENTS - initial states of segments stored column-wise; that is
@@ -241,7 +264,7 @@ class FalsSqpObj:
     i = 0
     
     #  statespace_dimension - state space dimension, number_of_segments - number of segments
-    [statespace_dimension, number_of_segments] = len(INITIAL_STATES_SEGMENTS)#size(INITIAL_STATES_SEGMENTS);
+    [statespace_dimension, number_of_segments] = len(INITIAL_STATES_SEGMENTS)#size(INITIAL_STATES_SEGMENTS); #todo
     
     #  initial Hessian approximation and initial xlambda
     #  Hb = matrix_Hessian => FULL BFGS!!!
@@ -437,7 +460,7 @@ class FalsSqpObj:
 
         elif (Hessian_computation == "BlockApprox"):
             #  Block Hessian approximation by (BFGS, DBFGS, SR1)
-            [matrix_Hessian, Hb_new] = mat_H_block(matrix_Hessian, Hb_old, s_k,
+            [matrix_Hessian, Hb_new] = hmat.mat_H_block(matrix_Hessian, Hb_old, s_k,
                                                    lag_grad_next - lag_grad, statespace_dimension,
                                                    number_of_segments, PROBLEM_FORMULATION)
             Hb_old = Hb_new
@@ -452,43 +475,43 @@ class FalsSqpObj:
 #            min_eig_it = [min_eig_it min_eig];
         elif (Hessian_computation == "MyHessLin"):
             #  MY HESSIAN APPROXIMATION SCHEME - analytic formulae
-            [matrix_Hessian] = my_Hess_linode(xlambda, si_o, sl_o,
-                                                    ODE_MATRIX_A, cen_IU(:,2), ell_I, ell_U, ODE_LIST)
+            [matrix_Hessian] = hmat.my_Hess_linode(xlambda, si_o, sl_o,
+                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U, ODE_LIST)
         elif (Hessian_computation == "MyHessLinGM"):
             #  MY HESSIAN APPROXIMATION SCHEME for lin ODE's + G-M update
-            [matrix_Hessian] = my_Hess_linode(xlambda, si_o, sl_o,
-                                                    ODE_MATRIX_A, cen_IU(:,2), ell_I, ell_U, ODE_LIST)
-            [R, E] = my_gillmurr(matrix_Hessian, np.sqrt(epsconst))
+            [matrix_Hessian] = hmat.my_Hess_linode(xlambda, si_o, sl_o,
+                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U, ODE_LIST)
+            [R, E] = hmat.my_gillmurr(matrix_Hessian, np.sqrt(epsconst))
             matrix_Hessian = matrix_Hessian + E
         elif (Hessian_computation == "MyHessNonLin"):
             #  MY HESSIAN APPROXIMATION SCHEME - NONLINER ODE. I use exact formulae + BFGS/damped BFGS/SR1
             if (i == 1):
                 Hb_old = np.tile(np.eye(statespace_dimension, statespace_dimension), (number_of_segments, 1))
             
-            [matrix_Hessian, Hb_new] = my_Hess_nonlinode(xlambda, si_o, sl_o, ODE_MATRIX_A, Hb_old,
+            [matrix_Hessian, Hb_new] = hmat.my_Hess_nonlinode(xlambda, si_o, sl_o, ODE_MATRIX_A, Hb_old,
                                                                s_k, lag_grad_next - lag_grad, cen_U, ell_I, ell_U,
                                                          ODE_LIST, FINITE_DIFFERENCE_SCHEME)
             Hb_old = Hb_new
         elif (Hessian_computation == "BlockApproxGM"):
             #  Block Hessian approximation by (BFGS, DBFGS, SR1)
-            [matrix_Hessian, Hb_new] = mat_H_block(matrix_Hessian, Hb_old, s_k,
+            [matrix_Hessian, Hb_new] = hmat.mat_H_block(matrix_Hessian, Hb_old, s_k,
                                                    lag_grad_next - lag_grad, statespace_dimension,
                                                    number_of_segments, PROBLEM_FORMULATION)
             Hb_old = Hb_new
             #  Applay Gill-Murray modified Cholesky
-            [R, E] = my_gillmurr(matrix_Hessian, np.sqrt(epsconst))
+            [R, E] = hmat.my_gillmurr(matrix_Hessian, np.sqrt(epsconst))
             matrix_Hessian = matrix_Hessian + E
         elif (Hessian_computation == "TrueHess"):
             #  Use builtin function to get the second derivatives
             #  !!!!! Very expensive    !!!!!!!
-            funkce = list(lagrangian_complet, statespace_dimension, number_of_segments, #todo list python?
+            funkce = list(self.lagrangian_complet, statespace_dimension, number_of_segments, #todo list python?
                           xlambda + size_step*direction_xlambda, ell_I, ell_U, cen_IU, ODE_MATRIX_A,
                                  FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST)
             sol = np.matrix([si_o, sl_o], number_of_segments*(statespace_dimension +1), 1)
-            [grad_L_opt, matrix_Hessian] = numderivative(funkce, sol, [], [], "blockmat")
+            [grad_L_opt, matrix_Hessian] = numderivative(funkce, sol, [], [], "blockmat") #todo numderivative
         else:
             #  Full Hessian approximation by (BFGS, DBFGS, SR1)
-            [matrix_Hessian] = mat_H(matrix_Hessian, s_k, lag_grad_next - lag_grad)
+            [matrix_Hessian] = hmat.mat_H(matrix_Hessian, s_k, lag_grad_next - lag_grad)
         
         
 ##      Hessian computation by the finite difference scheme "VERY EXPENSIVE"
@@ -536,23 +559,23 @@ class FalsSqpObj:
 
 
         #  Get the value of the objective function f_I + f_U
-        v = si_op[:,1] - cen_IU[:,1]
-        f_I = [f_I; v*ell_I*v] #v^T*ell_I*v #todo transpose
+        v = si_op[:,0] - cen_IU[:,0]
+        f_I = [f_I, v*ell_I*v] #v**T*ell_I*v #todo transpose
 #        my_ode = list(ode_lin, ODE_MATRIX_A, ODE_LIST(1));
 #        X = ode(si_o(:,$), 0, sl_o($), my_ode);
         [X, flag] = ode_simul(si_o[:,-1], sl_o[-1],ODE_LIST, ODE_MATRIX_A, 0)
         v = X - cen_IU[:,-1]
-        f_U = [f_U, v*ell_U*v] #v^T *ell_U*v #todo transpose
+        f_U = [f_U, v*ell_U*v] #v**T *ell_U*v #todo transpose
         of = [f_I, f_U]
         
          
         #  norm of the lagrangian and vector of constraints
-        if (nL[-1] < TO_STOP(1) & nc[-1] < TO_STOP(2)):
+        if (nL[-1] < TO_STOP[0] & nc[-1] < TO_STOP[1]):
             go_on = False
             flag = 1
         
         #  maximum number of iterations is reached
-        if  (i == TO_STOP(3)):
+        if  (i == TO_STOP[2]):
             go_on = False
             flag = 2
         
@@ -588,7 +611,7 @@ class FalsSqpObj:
 #            [QB, RB] = qr(const_Jac_next);
 #            Q = QB(:,size(const_Jac_next,2)+1:$);
 ##            PlotSparse(sparse(Q),"bo")
-#            disp(spec(Q'*matrix_Hessian*Q),"test SPD on KerB^T")
+#            disp(spec(Q'*matrix_Hessian*Q),"test SPD on KerB**T")
 #
 #            #  Get the Hessian
 #            x = [si_o; sl_o];
@@ -599,7 +622,7 @@ class FalsSqpObj:
 #            [J_o, H_o] = numderivative(fce, x);
 #            H_o = matrix(H_o, (statespace_dimension+1)*number_of_segments, (statespace_dimension+1)*number_of_segments);
 #            H_o = Q'*H_o*Q;
-#            disp(spec(H_o),"True Hessian on KerB^T", norm(J_o),"Norm of the gradient")
+#            disp(spec(H_o),"True Hessian on KerB**T", norm(J_o),"Norm of the gradient")
 #        end
 #
     #end
@@ -640,7 +663,7 @@ class FalsSqpObj:
 #endfunction
 
   def solve_kkt(self,matrix_Hessian, Bx, b, statespace_dimension, number_of_segments):
-    #  Function solves the KKT system, where a matrix matrix_KKT = [matrix_Hessian Bx; Bx^T 0];
+    #  Function solves the KKT system, where a matrix matrix_KKT = [matrix_Hessian Bx; Bx**T 0];
     
     #  INPUT:
     #      matrix_Hessian - Hessian matrix (its approximation) of the Lagrangian
@@ -663,14 +686,14 @@ class FalsSqpObj:
     #  OUTPUT:
     #      direction_x - a direction so that x_new = x_old + alpha*d_x
     #      direction_lambda - a direction so that lam_new = lam_old + alpha*d_l
-    #      matrix_KKT - KKT matrix of the form matrix_KKT = [matrix_Hessian Bx; Bx^T 0]
+    #      matrix_KKT - KKT matrix of the form matrix_KKT = [matrix_Hessian Bx; Bx**T 0]
     
     #=========================================================================
     
     H_size = matrix_Hessian.size();#todo size
     
-    #  Form KKT system matrix_KKT = [matrix_Hessian Bx, Bx^T 0]
-    if ( PROBLEM_FORMULATION == 3):#todo transpose [Bx bylo Bx^T
+    #  Form KKT system matrix_KKT = [matrix_Hessian Bx, Bx**T 0]
+    if ( PROBLEM_FORMULATION == 3):#todo transpose [Bx bylo Bx**T
         matrix_KKT = [[matrix_Hessian, Bx], [Bx, zeros(statespace_dimension*(number_of_segments-1)+2, statespace_dimension*(number_of_segments-1)+2)]];
     elif (PROBLEM_FORMULATION == 4):
         matrix_KKT = [[matrix_Hessian, Bx], [Bx, zeros(statespace_dimension*(number_of_segments-1), statespace_dimension*(number_of_segments-1))]];
@@ -693,7 +716,7 @@ class FalsSqpObj:
 #    m_KKT_bak = matrix_KKT;
     
     #  Get a fix for the conditioning ff the (1,1) block H
-#    w = norm(matrix_Hessian)/norm(Bx)^2
+#    w = norm(matrix_Hessian)/norm(Bx)**2
 #    matrix_KKT(1:H_size(1), 1:H_size(1)) = matrix_Hessian + w*Bx*Bx';
 #    b(1:H_size(1)) = b(1:H_size(1)) + w*Bx*b(H_size(1)+1:$);
     
@@ -729,8 +752,8 @@ class FalsSqpObj:
 #    y = [x_nsm;y_nsm];
      
 #     #    Solve KKT using the PROJECTED PCG with residual update
-     [x_o, y_o] = ppcg_lada(matrix_Hessian, Bx, matrix_KKT, b(1:size(matrix_Hessian, 1)), b(size(matrix_Hessian, 1)+1:-1))
-     y = [x_o,y_o]
+    [x_o, y_o] = ppcg_lada(matrix_Hessian, Bx, matrix_KKT, b[0:size(matrix_Hessian, 1)], b[size(matrix_Hessian, 1):-1])
+    y = [x_o,y_o]
      
 #     disp(norm(y-y_PCG), cond(matrix_KKT))
 
@@ -738,39 +761,39 @@ class FalsSqpObj:
     
     #  Get directions direction_x and direction_lambda from the solution vector y
     if (PROBLEM_FORMULATION == 1):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 2):
-        direction_x = y(1:number_of_segments*statespace_dimension)
-        direction_lambda = y(number_of_segments*statespace_dimension + 1:-1)
+        direction_x = y[0:number_of_segments*statespace_dimension]
+        direction_lambda = y[number_of_segments*statespace_dimension:-1]
     elif (PROBLEM_FORMULATION == 3):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 4):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 5):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 6):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
         direction_lambda = []
     elif (PROBLEM_FORMULATION == 7):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 8):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
         direction_lambda = []
     elif (PROBLEM_FORMULATION == 9):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     elif (PROBLEM_FORMULATION == 10):
-        direction_x = y(1:number_of_segments*(statespace_dimension+1))
-        direction_lambda = y(number_of_segments*(statespace_dimension+1)+1:-1)
+        direction_x = y[0:number_of_segments*(statespace_dimension+1)]
+        direction_lambda = y[number_of_segments*(statespace_dimension+1):-1]
     else:
         print "You need to select PROBLEM_FORMULATION = 1/2/3/4/5/6/7/8/9/10! ERROR in solve_kkt.sci"
         
-  return [direction_x, direction_lambda, matrix_KKT]
+    return [direction_x, direction_lambda, matrix_KKT]
 
 
 
@@ -805,5 +828,995 @@ function [dummy] = draw_segments(seg_i, seg_l, num_fig, which_dim, ode_list, ode
         a.y_ticks = yay;
     end
     dummy = "OK"
+endfunction
+"""
+
+"""
+function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST, ell_I, ell_U, cen_IU)
+    #  Function evaluates the vector of constraints c(x), Jacobian of constraints
+    #  B(x) = [gxc(x)_1, ... , gxc(x)_m-1]. A matrix T is a transformation matrix
+    
+    #  INPUT:
+    #      INITIAL_STATES_SEGMENTS - initial states of segments stored column-wise; that is
+    #                 INITIAL_STATES_SEGMENTS(:,i) is the initial state of the i-th segment
+    #      LENGTHS_SEGMENTS - length of segments; sl_o(i) is the length of the i-th
+    #                  segment
+    #      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
+    #      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
+    #          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
+    #      PROBLEM_FORMULATION - a switch between various formulation of the objective function f(x)
+    #          and the vectors of constraints c(x)
+    #      ODE_LIST - a switch between dynamical systems; for testing
+    #      ell_I - a SPD matrix giving the shape of the ellipsoid of the
+    #              initial states I
+    #      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
+    #              states U
+    #      cen_IU - centres of ellipsoids I and U; stored solumn-wise
+    
+    #  OUTPUT:
+    #      const_val - vector of constraints c(x)
+    #      const_Jac - Jacobian of constraints B(x)
+    #      T - transformation matrix (a = -T*b)
+    
+    #=========================================================================
+    
+    [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS)
+    const_val = [];
+    
+    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1))
+    
+    if (PROBLEM_FORMULATION == 1):
+        #  f(x) = d_I + d_U; c(x) are matching conditions; lengths of segments
+        #  are not fixed.
+        
+        #  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+            [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                                     ODE_LIST, ode_matrix_A, 0)
+    #        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+            const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        end
+    elif (PROBLEM_FORMULATION == 2):
+        #  f(x) = d_I + d_U; c(x) are matching conditions;
+        #  lengths of segments are fixed.
+        
+        #  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+            [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                                     ODE_LIST, ode_matrix_A, 0)
+    #        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+            const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        end
+    elif (PROBLEM_FORMULATION == 3):
+        #  f(x) = \sum t_i**2;
+        #  c(x) are matching conditions, moreover, initial state \in I,
+        #  the final state \in U;
+        #  lengths of segments are not fixed.
+        
+        #  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+            [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                                 ODE_LIST, ode_matrix_A, 0)
+#            [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+            const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        end
+
+        
+        #  I need to add two more scalar constraints
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+        v = x_end - cen_IU(:,$);
+        const_val = [0.5*(u'*ell_I*u - 1); const_val; 0.5*(v'*ell_U*v - 1)];
+    elif (PROBLEM_FORMULATION == 4):
+        #  Here, the objective function is F(x) = d_I + d_U + 0.5*\sum t_i**2
+        #  In the vector of constraints there are only the matching conditions
+        #  Lengths of segments are not fixed.
+        
+        #  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+            [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#            [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+            const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        end
+    elif (PROBLEM_FORMULATION == 5):
+        #  F(x) = 0.5*\sum gap_i**2; c(x) are the distances to c_I, c_U so that
+        #  the initial state is in I and the final state is in U.
+        #  Lengths of segments are not fixed.
+        
+        #  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+        v = x_end - cen_IU(:,$);
+        #  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+    elif (PROBLEM_FORMULATION == 6):
+        #  F(x) = f_I + f_U + \sum gap_i with no constraints c(x)
+        #  Lengths of segments are not fixed.
+        
+        #  Get c(x), B(x) and T
+        const_val = [];
+    elif (PROBLEM_FORMULATION == 7):
+        #  F(x) = 0.5*\sum gap_i**2 + 0.5*\sum t_i**2; c(x) are distances to c_I and c_U
+        #  Lengths of segments are not fixed;
+        #  It is another form of CASE 5
+        #  I need FULL BFGS UPDATE
+        
+        #  The rest is the same as in CASE 5 since the constraints remain unchanged
+        #  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:, $), LENGTHS_SEGMENTS($),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+        v = x_end - cen_IU(:,$);
+        
+        #  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+    case 8 then
+        #  F(x) = f_I + f_U + 0.5*\sum gap_i**2 + 0.5*\sum t_i**2; NO CONSTRAINTS
+        #  Lengths of segments are not fixed;
+        #  It is another form of CASE 6
+        #  I need FULL BFGS UPDATE
+        
+        #  Get c(x), B(x) and T
+        const_val = [];
+    case 9 then
+        #  F(x) = 0.5*\sum gap_i**2 + 0.5*\sum (t_{i+1} - t_i)**2; c(x) are distances to c_I and c_U
+        #  Lengths of segments are not fixed;
+        #  It is another form of CASE 5
+        #  I need FULL BFGS UPDATE
+        
+        #  The rest is the same as in CASE 5 since the constraints remain unchanged
+        #  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+        v = x_end - cen_IU(:,$);
+        
+        #  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+    case 10 then
+        #  F(x) = 0.5*\sum gap_i**2 + 0.5*\sum (t_i - mean)**2; c(x) are distances to c_I and c_U
+        #  Lengths of segments are not fixed;
+        #  It is another form of CASE 9
+        #  I need FULL BFGS UPDATE
+        
+        #  The rest is the same as in CASE 5 since the constraints remain unchanged
+        #  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
+                                 ODE_LIST, ode_matrix_A, 0);
+#        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+        v = x_end - cen_IU(:,$);
+        
+        #  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+    else
+        disp("You need to select PROBLEM_FORMULATION = 1/2/3/4/5/6/7/8/9/10! ERROR in const_nx.sci")
+        break;
+    end
+endfunction 
+
+function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST, ell_I, ell_U, cen_IU)
+    //  Function evaluates the vector of constraints c(x), Jacobian of constraints
+    //  B(x) = [gxc(x)_1, ... , gxc(x)_m-1]. A matrix T is a transformation matrix
+    
+    //  INPUT:
+    //      INITIAL_STATES_SEGMENTS - initial states of segments stored column-wise; that is
+    //                 INITIAL_STATES_SEGMENTS(:,i) is the initial state of the i-th segment
+    //      LENGTHS_SEGMENTS - length of segments; sl_o(i) is the length of the i-th
+    //                  segment
+    //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
+    //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
+    //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
+    //      PROBLEM_FORMULATION - a switch between various formulation of the objective function f(x)
+    //          and the vectors of constraints c(x)
+    //      ODE_LIST - a switch between dynamical systems; for testing
+    //      ell_I - a SPD matrix giving the shape of the ellipsoid of the
+    //              initial states I
+    //      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
+    //              states U
+    //      cen_IU - centres of ellipsoids I and U; stored solumn-wise
+    
+    //  OUTPUT:
+    //      const_val - vector of constraints c(x)
+    //      const_Jac - Jacobian of constraints B(x)
+    //      T - transformation matrix (a = -T*b)
+    
+    //=========================================================================
+    
+    
+    
+    [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS);
+    
+    //  initialize data
+    T = eye(statespace_dimension, statespace_dimension);
+    const_val = [];
+    const_Jac = [];
+    
+    //  dummy variables
+    Sx = [];
+    Sd = [];
+    
+    
+    select PROBLEM_FORMULATION
+    case 1 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions; lengths of segments
+        //  are not fixed.
+        
+        //  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        //  get dx/dt in x_end
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        Sx = sysdiag(Sx, [-x_sen'; -dxdt']);
+        Sd = sysdiag(Sd, [zeros(1, statespace_dimension); eye(statespace_dimension, statespace_dimension)]);
+        T = T*x_sen;
+        end
+        
+        //  construct const_Jac
+        Sx = [Sx; zeros(statespace_dimension + 1,size(Sx,2))];
+        Sd = [zeros(statespace_dimension,size(Sd,2)); Sd; zeros(1, size(Sd, 2))];
+        const_Jac = Sx + Sd;
+    case 2 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions;
+        //  lengths of segments are fixed.
+        
+        //  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        Sx = sysdiag(Sx, -x_sen');
+        Sd = sysdiag(Sd, eye(statespace_dimension, statespace_dimension));
+        T = T*x_sen;
+        end
+        
+        //  construct const_Jac
+        Sx = [Sx; zeros(statespace_dimension,size(Sx,2))];
+        Sd = [zeros(statespace_dimension,size(Sd,2)); Sd];
+        const_Jac = [Sx + Sd];
+    case 3 then
+        //  f(x) = \sum t_i^2;
+        //  c(x) are matching conditions, moreover, initial state \in I,
+        //  the final state \in U;
+        //  lengths of segments are not fixed.
+        
+        //  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        
+        //  get dx/dt in x_end
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        Sx = sysdiag(Sx, [-x_sen'; -dxdt']);
+        Sd = sysdiag(Sd, [zeros(1, statespace_dimension); eye(statespace_dimension, statespace_dimension)]);
+//        //I do not need this here
+//        T = T*x_sen;
+        end
+        
+        //  construct const_Jac
+        Sx = [Sx; zeros(statespace_dimension + 1,size(Sx,2))];
+        Sd = [zeros(statespace_dimension,size(Sd,2)); Sd; zeros(1, size(Sd, 2))];
+        const_Jac = Sx + Sd;
+        
+        //  I need to add two more scalar constraints
+        [k, l] = size(const_Jac);
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        v = x_end - cen_IU(:,$);
+        
+        //  Single/Multiple shooting case
+        if const_Jac == [] then
+            const_Jac = [ell_I*u; 0];
+            const_Jac = [const_Jac, [x_sen'*ell_U*v; v'*ell_U*dxdt]];
+        else
+            const_Jac = [[ell_I*u; zeros(k-statespace_dimension,1)], const_Jac];
+            const_Jac = [const_Jac, [zeros(k-statespace_dimension-1,1); x_sen'*ell_U*v; v'*ell_U*dxdt]];
+        end
+        
+        
+        
+        //  Add two more constraints to c(x)
+        const_val = [0.5*(u'*ell_I*u - 1); const_val; 0.5*(v'*ell_U*v - 1)];
+    case 4 then
+        //  Here, the objective function is F(x) = d_I + d_U + 0.5*\sum t_i^2
+        //  In the vector of constraints there are only the matching conditions
+        //  Lengths of segments are not fixed.
+        
+        //  Data for c(x), B(x) and T
+        for i = 1:number_of_segments-1
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
+        //  get dx/dt in x_end
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        Sx = sysdiag(Sx, [-x_sen'; -dxdt']);
+        Sd = sysdiag(Sd, [zeros(1, statespace_dimension); eye(statespace_dimension, statespace_dimension)]);
+        T = T*x_sen;
+        end
+        
+        //  construct const_Jac
+        Sx = [Sx; zeros(statespace_dimension + 1,size(Sx,2))];
+        Sd = [zeros(statespace_dimension,size(Sd,2)); Sd; zeros(1, size(Sd, 2))];
+        const_Jac = Sx + Sd;
+    case 5 then
+        //  F(x) = 0.5*\sum gap_i^2; c(x) are the distances to c_I, c_U so that
+        //  the initial state is in I and the final state is in U.
+        //  Lengths of segments are not fixed.
+        
+        //  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        v = x_end - cen_IU(:,$);
+        
+        //  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+        //  Jacobian of constraints
+        const_Jac = [ell_I*u; 0; zeros((number_of_segments-1)*(statespace_dimension+1),1)];
+        const_Jac = [const_Jac, [zeros((number_of_segments-1)*(statespace_dimension+1),1); x_sen'*ell_U*v; v'*ell_U*dxdt]];
+    case 6 then
+        //  F(x) = f_I + f_U + \sum gap_i with no constraints c(x)
+        //  Lengths of segments are not fixed.
+        
+        //  Get c(x), B(x) and T
+        const_val = [];
+        const_Jac = [];
+        T = [];
+    case 7 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        
+        //  The rest is the same as in CASE 5 since the constraints remain unchanged
+        //  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        v = x_end - cen_IU(:,$);
+        
+        //  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+        //  Jacobian of constraints
+        const_Jac = [ell_I*u; 0; zeros((number_of_segments-1)*(statespace_dimension+1),1)];
+        const_Jac = [const_Jac, [zeros((number_of_segments-1)*(statespace_dimension+1),1); x_sen'*ell_U*v; v'*ell_U*dxdt]];
+    case 8 then
+        //  F(x) = f_I + f_U + 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; NO CONSTRAINTS
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 6
+        //  I need FULL BFGS UPDATE
+        
+        //  Get c(x), B(x) and T
+        const_val = [];
+        const_Jac = [];
+        T = [];
+    case 9 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_{i+1} - t_i)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        
+        //  The rest is the same as in CASE 5 since the constraints remain unchanged
+        //  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        v = x_end - cen_IU(:,$);
+        
+        //  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+        //  Jacobian of constraints
+        const_Jac = [ell_I*u; 0; zeros((number_of_segments-1)*(statespace_dimension+1),1)];
+        const_Jac = [const_Jac, [zeros((number_of_segments-1)*(statespace_dimension+1),1); x_sen'*ell_U*v; v'*ell_U*dxdt]];
+    case 10 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_i - mean)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 9
+        //  I need FULL BFGS UPDATE
+        
+        //  The rest is the same as in CASE 5 since the constraints remain unchanged
+        //  Data for c(x), B(x) and T
+        u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+        [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+        v = x_end - cen_IU(:,$);
+        
+        //  vector of constraints
+        const_val = [0.5*(u'*ell_I*u - 1); 0.5*(v'*ell_U*v - 1)];
+        //  Jacobian of constraints
+        const_Jac = [ell_I*u; 0; zeros((number_of_segments-1)*(statespace_dimension+1),1)];
+        const_Jac = [const_Jac, [zeros((number_of_segments-1)*(statespace_dimension+1),1); x_sen'*ell_U*v; v'*ell_U*dxdt]];
+    else
+        disp("You need to select PROBLEM_FORMULATION = 1/2/3/4/5/6/7/8/9/10! ERROR in const_nx.sci")
+        break;
+    end
+endfunction
+
+function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST)
+    //  Function evaluates the objective function F(x) and its gradient gxF(x)
+    
+    //  INPUT:
+    //      INITIAL_STATES_SEGMENTS - initial states of segments stored column-wise; that is
+    //                 INITIAL_STATES_SEGMENTS(:,i) is the initial state of the i-th segment
+    //      LENGTHS_SEGMENTS - length of segments; sl_o(i) is the length of the i-th
+    //                  segment
+    //      ell_I - a SPD matrix giving the shape of the ellipsoid of the
+    //              initial states I
+    //      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
+    //              states U
+    //      cen_IU - centres of ellipsoids I and U; stored solumn-wise
+    //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
+    //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
+    //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
+    //      PROBLEM_FORMULATION - a switch between various formulation of the objective function f(x)
+    //          and the vectors of constraints c(x)
+    //      ODE_LIST - a switch between dynamical systems; for testing
+    
+    //  OUTPUT:
+    //      obj_fun_val - objective function F(x)
+    //      obj_fun_grad - gradient gxF(x)
+    
+    //=========================================================================
+    
+    
+    
+    //  initialize data
+    obj_fun_val = 0;
+    obj_fun_grad = [];
+    
+    //  Set the dynamics
+    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1));
+    
+    //  Compute f_I
+    u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+    f_I = 0.5*u'*ell_I*u;
+    
+        
+    //  the gradient with respect to x_0^1, x_0^N, t_N
+    delta_I = norm(INITIAL_STATES_SEGMENTS(:,1))*sqrt(%eps);
+    delta_U = norm(INITIAL_STATES_SEGMENTS(:,$))*sqrt(%eps);
+    delta_t = norm(LENGTHS_SEGMENTS($))*sqrt(%eps);
+    gfx_I = [];
+    gfx_U = [];
+    gfx_t = [];
+    
+    [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS);
+    e_i = eye(statespace_dimension,statespace_dimension);
+    
+    
+    select FINITE_DIFFERENCE_SCHEME
+    case 1 then
+        //  forward difference
+        ic = repmat(INITIAL_STATES_SEGMENTS(:,$), 1, statespace_dimension) + delta_I*e_i;
+        X = ode([INITIAL_STATES_SEGMENTS(:,$), ic], 0, LENGTHS_SEGMENTS($), my_ode);
+        v = X(:,1) - cen_IU(:,$);
+        f_U = 0.5*v'*ell_U*v;
+        
+        for i = 1:statespace_dimension
+            //  df/dx_0^1
+            u_f = INITIAL_STATES_SEGMENTS(:, 1) + delta_I*e_i(:, i) - cen_IU(:, 1);
+            f_If = 0.5*u_f'*ell_I*u_f;
+            gfx_I = [gfx_I; (f_If - f_I)/delta_I];
+            
+            //  df/dx_0^N
+            v_f = X(:,i+1) - cen_IU(:,$);
+            f_Uf = 0.5*v_f'*ell_U*v_f;
+            gfx_U = [gfx_U; (f_Uf - f_U)/delta_U];
+        end
+        
+        //  df/dt_N
+        X = ode(INITIAL_STATES_SEGMENTS(:,$), 0, [LENGTHS_SEGMENTS($), LENGTHS_SEGMENTS($) + delta_t], my_ode);
+        v = X(:,1) - cen_IU(:,$);
+        v_f = X(:,$) - cen_IU(:,$);
+        f_U = 0.5*v'*ell_U*v;
+        f_Uf = 0.5*v_f'*ell_U*v_f;
+        gfx_t = (f_Uf - f_U)/delta_t;
+        
+
+    case 2 then
+        //  steps for the central difference scheme
+        delta_I = norm(INITIAL_STATES_SEGMENTS(:,1))*%eps^(1/3);
+        delta_U = norm(INITIAL_STATES_SEGMENTS(:,$))*%eps^(1/3);
+        delta_t = norm(LENGTHS_SEGMENTS($))*%eps^(1/3);
+        
+        //  central difference
+        ic_f = repmat(INITIAL_STATES_SEGMENTS(:,$), 1, statespace_dimension) + delta_I*e_i;
+        ic_b = repmat(INITIAL_STATES_SEGMENTS(:,$), 1, statespace_dimension) - delta_I*e_i;
+//        X = ode([INITIAL_STATES_SEGMENTS(:,$), ic_f, ic_b], 0, LENGTHS_SEGMENTS($), my_ode);
+
+        //  ode_simul for hybrid case
+        //==================================================================================
+        ic = [INITIAL_STATES_SEGMENTS(:,$), ic_f, ic_b];
+        X = [];
+        for i = 1:size(ic, 2)
+            [sol, flag] = ode_simul(ic(:,i), LENGTHS_SEGMENTS($), ODE_LIST, ode_matrix_A, 0);
+            X = [X sol];
+        end
+        //==================================================================================
+
+        v = X(:,1) - cen_IU(:,$);
+        f_U = 0.5*v'*ell_U*v;
+        
+        
+        for i = 1:statespace_dimension
+            //  df/dx_0^1
+            u_f = INITIAL_STATES_SEGMENTS(:, 1) + delta_I*e_i(:, i) - cen_IU(:, 1);
+            u_b = INITIAL_STATES_SEGMENTS(:, 1) - delta_I*e_i(:, i) - cen_IU(:, 1);
+            f_If = 0.5*u_f'*ell_I*u_f;
+            f_Ib = 0.5*u_b'*ell_I*u_b;
+            gfx_I = [gfx_I; (f_If - f_Ib)/(2*delta_I)];
+            
+            //  df/dx_0^N
+            v_f = X(:,i+1) - cen_IU(:,$);
+            v_b = X(:,statespace_dimension+i+1) - cen_IU(:,$);
+            f_Uf = 0.5*v_f'*ell_U*v_f;
+            f_Ub = 0.5*v_b'*ell_U*v_b;
+            gfx_U = [gfx_U; (f_Uf - f_Ub)/(2*delta_U)];
+        end
+        
+        //  df/dt_N
+//        X = ode(INITIAL_STATES_SEGMENTS(:,$), 0, [LENGTHS_SEGMENTS($), LENGTHS_SEGMENTS($) + delta_t, LENGTHS_SEGMENTS($) - delta_t], my_ode);
+        
+        //  ode_simul for hybrid case (not the best implementation)
+        //==================================================================================
+        ic = INITIAL_STATES_SEGMENTS(:,$)
+        X = [];
+        t_int = [LENGTHS_SEGMENTS($), LENGTHS_SEGMENTS($) + delta_t, LENGTHS_SEGMENTS($) - delta_t];
+        for i = 1:length(t_int)
+            [sol, flag] = ode_simul(ic, t_int(i), ODE_LIST, ode_matrix_A, 0);
+            X = [X sol];
+        end
+        //==================================================================================
+        
+        v_f = X(:,$-1) - cen_IU(:,$);
+        v_b = X(:,$) - cen_IU(:,$);
+        f_Uf = 0.5*v_f'*ell_U*v_f;
+        f_Ub = 0.5*v_b'*ell_U*v_b;
+        gfx_t = (f_Uf - f_Ub)/(2*delta_t);
+        
+    case 3 then
+        //  Analytical solution --- or the best I can get according to theory
+        //  Get f_I (already done), f_U, gfx_I, gfx_U, gfx_t
+ 
+        //  gfx_I
+        gfx_I = ell_I*u;
+        
+        //  gfx_U and f_U
+        [S_end, X_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$),...
+        LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        v = X_end - cen_IU(:,$);
+        f_U = 0.5*v'*ell_U*v;
+        gfx_U = S_end'*ell_U*v
+        
+        //  gfx_t
+        dxdt = ode_rhs(X_end, ode_matrix_A, ODE_LIST(1));
+        gfx_t = v'*ell_U*dxdt;
+        
+    else
+        break;
+    end
+    
+    
+    select PROBLEM_FORMULATION
+    case 1 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions; lengths of segments
+        //  are not fixed.
+        obj_fun_val = f_I + f_U;
+        if number_of_segments == 1 then
+            obj_fun_grad = [gfx_I; gfx_t];
+        else
+            obj_fun_grad = [gfx_I; zeros(statespace_dimension*(number_of_segments-2)+number_of_segments-1,1); gfx_U; gfx_t];
+        end
+        
+    case 2 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions;
+        //  lengths of segments are fixed.
+        obj_fun_val = f_I + f_U;
+        if number_of_segments == 1 then
+            obj_fun_grad = [gfx_I];
+        else
+            obj_fun_grad = [gfx_I; zeros(statespace_dimension*(number_of_segments-2),1); gfx_U];
+        end
+    case 3 then
+        //  f(x) = 0.5*\sum t_i^2;
+        //  c(x) are matching conditions, moreover, initial state \in I,
+        //  the final state \in U;
+        //  lengths of segments are not fixed.
+        obj_fun_val = 0.5*sum(LENGTHS_SEGMENTS.^2);
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension,1); LENGTHS_SEGMENTS($)];
+        else
+            for i = 1:number_of_segments
+                obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); LENGTHS_SEGMENTS(i)];
+            end
+        end
+    case 4 then
+        //  Here, the objective function is F(x) = d_I + d_U + 0.5*\sum t_i^2
+        //  In the vector of constraints there are only the matching conditions
+        //  Lengths of segments are not fixed.
+        obj_fun_val = f_I + f_U + 0.5*sum(LENGTHS_SEGMENTS.^2);
+        if number_of_segments == 1 then
+            obj_fun_grad = [gfx_I; gfx_t + LENGTHS_SEGMENTS($)];
+        else
+            for i = 1:number_of_segments
+                obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); LENGTHS_SEGMENTS(i)];
+            end
+            obj_fun_grad = obj_fun_grad + [gfx_I; zeros(statespace_dimension*(number_of_segments-2)+number_of_segments-1,1); gfx_U; gfx_t];
+        end
+    case 5 then
+        //  F(x) = 0.5*\sum gap_i^2; c(x) are the distances to c_I, c_U so that
+        //  the initial state is in I and the final state is in U.
+        //  Lengths of segments are not fixed.
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension+1,1)];
+            obj_fun_val = 0;
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end);
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end)];
+                //  the secodn part of the gradient
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension+1,1)];
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+        end
+    case 6 then
+        //  F(x) = f_I + f_U + 0.5*\sum gap_i^2 with no constraints c(x)
+        //  Lengths of segments are not fixed.
+        
+        obj_fun_val = f_I + f_U;
+        
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension+1,1)];
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end);
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end)];
+                //  the secodn part of the gradient
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            //  part of the gradient coming from 0.5*\sum gap_i
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension+1,1)];
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+            //  part of the gradient for f_I + f_U
+            obj_fun_grad = obj_fun_grad + [gfx_I; zeros(statespace_dimension*(number_of_segments-2)+number_of_segments-1,1); gfx_U; gfx_t];
+        end
+    case 7 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension,1); LENGTHS_SEGMENTS($)];
+            obj_fun_val = 0.5*LENGTHS_SEGMENTS($)^2;
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + 0.5*LENGTHS_SEGMENTS(i)^2;
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + LENGTHS_SEGMENTS(i)];
+                //  the secodn part of the gradient regarding gaps between consecutive segments
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+            //  Add final time information from the objective function
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); LENGTHS_SEGMENTS($)];
+            //  Add the rest
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+        end
+    case 8 then
+        //  F(x) = f_I + f_U + 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; NO CONSTRAINTS
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 6
+        //  I need FULL BFGS UPDATE
+        
+        obj_fun_val = f_I + f_U;
+        
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension, 1); LENGTHS_SEGMENTS($)];
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + 0.5*LENGTHS_SEGMENTS(i)^2;
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + LENGTHS_SEGMENTS(i)];
+                //  the secodn part of the gradient regarding gaps between consecutive segments
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+            //  Add final time information from the objective function
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); LENGTHS_SEGMENTS($)];
+            //  Add the rest
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+            //  part of the gradient for f_I + f_U
+            obj_fun_grad = obj_fun_grad + [gfx_I; zeros(statespace_dimension*(number_of_segments-2)+number_of_segments-1,1); gfx_U; gfx_t];
+        end
+    case 9 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_{i+1} - t_i)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            //  THIS HASE NO USE IN CASE OF SINGLE-SHOOTING
+            obj_fun_grad = [zeros(statespace_dimension,1); LENGTHS_SEGMENTS($)];
+            obj_fun_val = 0;
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + ...
+                0.5*(LENGTHS_SEGMENTS(i+1) - LENGTHS_SEGMENTS(i))^2;
+                
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end)];
+                //  the secodn part of the gradient regarding gaps between consecutive segments
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            
+            //  Add final time information from the objective function
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); (LENGTHS_SEGMENTS($) - LENGTHS_SEGMENTS($-1))];
+            
+            //  Add the rest for the gaps
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+            
+            //  Add time information to the gradient
+            gt = [zeros(statespace_dimension,1); -(LENGTHS_SEGMENTS(2) - LENGTHS_SEGMENTS(1))];
+            for i = 2:number_of_segments-1
+                gt = [gt; zeros(statespace_dimension,1); (LENGTHS_SEGMENTS(i) - LENGTHS_SEGMENTS(i-1)) - ...
+                (LENGTHS_SEGMENTS(i+1) - LENGTHS_SEGMENTS(i))];
+            end
+            gt = [gt;zeros(statespace_dimension+1,1)];
+            obj_fun_grad = obj_fun_grad + gt;
+        end
+    case 10 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_i - mean)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 9
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            //  THIS HASE NO USE IN CASE OF SINGLE-SHOOTING
+            obj_fun_grad = [zeros(statespace_dimension,1); 0];
+            obj_fun_val = 0;
+        else
+            av = sum(LENGTHS_SEGMENTS)/number_of_segments;
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+                dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+                
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + ...
+                0.5*(LENGTHS_SEGMENTS(i) - av)^2;
+                
+                obj_fun_grad = [obj_fun_grad; -x_sen'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end); -dxdt'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + ...
+                (LENGTHS_SEGMENTS(i) - av)];
+                //  the secodn part of the gradient regarding gaps between consecutive segments
+                gaps = [gaps; INITIAL_STATES_SEGMENTS(:,i+1) - x_end; 0];
+            end
+            
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*(LENGTHS_SEGMENTS($) - av)^2;
+            
+            //  Add final time information from the objective function to the gradient
+            obj_fun_grad = [obj_fun_grad; zeros(statespace_dimension,1); (LENGTHS_SEGMENTS($) - av)];
+            
+            //  Add the rest for the gaps
+            gaps = [zeros(statespace_dimension+1,1); gaps];
+            obj_fun_grad = obj_fun_grad + gaps;
+        end
+    else
+        disp("You need to select PROBLEM_FORMULATION = 1/2/3/4/5/6/7/8/9/10! ERROR in object_fx.sci")
+        break;
+    end
+endfunction
+
+function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, PROBLEM_FORMULATION, ODE_LIST)
+    //  Function evaluates the objective function F(x) and its gradient gxF(x)
+    
+    //  INPUT:
+    //      INITIAL_STATES_SEGMENTS - initial states of segments stored column-wise; that is
+    //                 INITIAL_STATES_SEGMENTS(:,i) is the initial state of the i-th segment
+    //      LENGTHS_SEGMENTS - length of segments; sl_o(i) is the length of the i-th
+    //                  segment
+    //      ell_I - a SPD matrix giving the shape of the ellipsoid of the
+    //              initial states I
+    //      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
+    //              states U
+    //      cen_IU - centres of ellipsoids I and U; stored solumn-wise
+    //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
+    //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
+    //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
+    //      PROBLEM_FORMULATION - a switch between various formulation of the objective function f(x)
+    //          and the vectors of constraints c(x)
+    //      ODE_LIST - a switch between dynamical systems; for testing
+    
+    //  OUTPUT:
+    //      obj_fun_val - objective function F(x)
+    //      obj_fun_grad - gradient gxF(x)
+    
+    //=========================================================================
+    
+    
+    //  initialize data
+    obj_fun_val = 0;
+    sen = 0;    //  0/1 sensitivity computation YES/NO
+    
+    //  Set the dynamics
+//    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1));
+    
+    //  Compute f_I
+    u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
+    f_I = 0.5*u'*ell_I*u;
+    
+    //  Compute f_U
+    [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
+                             ODE_LIST, ode_matrix_A, sen);
+//    x_end = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
+    v = x_end - cen_IU(:,$);
+    f_U = 0.5*v'*ell_U*v;
+    
+    
+    [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS);
+    e_i = eye(statespace_dimension,statespace_dimension);
+    
+    
+    select PROBLEM_FORMULATION
+    case 1 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions; lengths of segments
+        //  are not fixed.
+        obj_fun_val = f_I + f_U;
+        
+    case 2 then
+        //  f(x) = d_I + d_U; c(x) are matching conditions;
+        //  lengths of segments are fixed.
+        obj_fun_val = f_I + f_U;
+
+    case 3 then
+        //  f(x) = 0.5*\sum t_i^2;
+        //  c(x) are matching conditions, moreover, initial state \in I,
+        //  the final state \in U;
+        //  lengths of segments are not fixed.
+        obj_fun_val = 0.5*sum(LENGTHS_SEGMENTS.^2);
+        
+    case 4 then
+        //  Here, the objective function is F(x) = d_I + d_U + 0.5*\sum t_i^2
+        //  In the vector of constraints there are only the matching conditions
+        //  Lengths of segments are not fixed.
+        obj_fun_val = f_I + f_U + 0.5*sum(LENGTHS_SEGMENTS.^2);
+
+    case 5 then
+        //  F(x) = 0.5*\sum gap_i^2; c(x) are the distances to c_I, c_U so that
+        //  the initial state is in I and the final state is in U.
+        //  Lengths of segments are not fixed.
+        if number_of_segments == 1 then
+            obj_fun_val = 0;
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end);
+            end
+        end
+    case 6 then
+        //  F(x) = f_I + f_U + 0.5*\sum gap_i^2 with no constraints c(x)
+        //  Lengths of segments are not fixed.
+        
+        obj_fun_val = f_I + f_U;
+        
+        if number_of_segments == 1 then
+            obj_fun_grad = [zeros(statespace_dimension+1,1)];
+        else
+            gaps = [];
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end);
+            end
+        end
+    case 7 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            obj_fun_val = 0.5*LENGTHS_SEGMENTS($)^2;
+        else
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + 0.5*LENGTHS_SEGMENTS(i)^2;
+            end
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+        end
+    case 8 then
+        //  F(x) = f_I + f_U + 0.5*\sum gap_i^2 + 0.5*\sum t_i^2; NO CONSTRAINTS
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 6
+        //  I need FULL BFGS UPDATE
+        
+        obj_fun_val = f_I + f_U;
+        
+        if number_of_segments == 1 then
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+        else
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + 0.5*LENGTHS_SEGMENTS(i)^2;
+            end
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*LENGTHS_SEGMENTS($)^2;
+        end
+    case 9 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_{i+1} - t_i)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 5
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            //  THIS HASE NO USE IN CASE OF SINGLE-SHOOTING
+            obj_fun_val = 0;
+        else
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + ...
+                0.5*(LENGTHS_SEGMENTS(i+1) - LENGTHS_SEGMENTS(i))^2;
+            end
+        end
+    case 10 then
+        //  F(x) = 0.5*\sum gap_i^2 + 0.5*\sum (t_i - mean)^2; c(x) are distances to c_I and c_U
+        //  Lengths of segments are not fixed;
+        //  It is another form of CASE 9
+        //  I need FULL BFGS UPDATE
+        if number_of_segments == 1 then
+            //  THIS HASE NO USE IN CASE OF SINGLE-SHOOTING
+            obj_fun_val = 0;
+        else
+            av = sum(LENGTHS_SEGMENTS)/number_of_segments;
+            for i = 1:number_of_segments-1
+                [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
+                             ODE_LIST, ode_matrix_A, sen);
+//                [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
+                obj_fun_val = obj_fun_val + 0.5*(INITIAL_STATES_SEGMENTS(:,i+1) - x_end)'*(INITIAL_STATES_SEGMENTS(:,i+1)-x_end) + ...
+                0.5*(LENGTHS_SEGMENTS(i) - av)^2;
+            end
+            
+            //  Add final time to the objective function
+            obj_fun_val = obj_fun_val + 0.5*(LENGTHS_SEGMENTS($) - av)^2;
+        end
+    else
+        disp("You need to select PROBLEM_FORMULATION = 1/2/3/4/5/6/7/8/9/10! ERROR in object_fx.sci")
+        break;
+    end
 endfunction
 """
