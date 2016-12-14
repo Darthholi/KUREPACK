@@ -31,18 +31,21 @@ def mat_H(matrix_Hessian, s, y):
     elif ( Hessian_approximation == "SR1"):
 #        disp(1e-8*norm(s)*norm(y - matrix_Hessian*s))
         #      SR-1 approximation scheme (indefinite matrix)
-        if (abs(s*(y - matrix_Hessian*s)) < 1e-8*np.norm(s)*np.norm(y - matrix_Hessian*s)): #todo transpo abs(s'*(y - matrix_Hessian*s)) < 1e-8*norm(s)*norm(y - matrix_Hessian*s) then
+        Hs = np.dot(matrix_Hessian,s)
+        if (abs(np.vdot(s,Hs) < 1e-8*np.norm(s)*np.norm(y - Hs)): #was abs(s'*(y - matrix_Hessian*s)) < 1e-8*norm(s)*norm(y - matrix_Hessian*s) then
             matrix_Hessian_next = matrix_Hessian
-        elif (np.norm(y - matrix_Hessian*s) < 1e-8):
+        elif (np.norm(y - Hs) < 1e-8):
             matrix_Hessian_next = matrix_Hessian
         else:
-            #todo transpo matrix_Hessian_next = matrix_Hessian + ((y-matrix_Hessian*s)*(y-matrix_Hessian*s)')/((y-matrix_Hessian*s)'*s);
-            matrix_Hessian_next = matrix_Hessian + ((y-matrix_Hessian*s)*(y-matrix_Hessian*s))/((y-matrix_Hessian*s)*s)
+            #was matrix_Hessian_next = matrix_Hessian + ((y-matrix_Hessian*s)*(y-matrix_Hessian*s)')/((y-matrix_Hessian*s)'*s);
+            matrix_Hessian_next = matrix_Hessian + (np.vdot(y-Hs,y-Hs))/(np.vdot(y-Hs,s))
     else:
     #elif ( Hessian_approximation == "BFGS"):
         #  BFGS approximation scheme
-        if (np.vdot(s,y) > 0): #todo transp s'*y
-            matrix_Hessian_next = matrix_Hessian + (y*y')/(y'*s) - (matrix_Hessian*s*s'*matrix_Hessian)/(s'*matrix_Hessian*s);
+        if (np.vdot(s,y) > 0): #was transp s'*y
+            #was matrix_Hessian_next = matrix_Hessian + (y*y')/(y'*s) - (matrix_Hessian*s*s'*matrix_Hessian)/(s'*matrix_Hessian*s);
+            Hs = np.dot(matrix_Hessian, s)
+            matrix_Hessian_next = matrix_Hessian + (np.vdot(y, y)) / (np.vdot(y, s)) - (np.vdot(Hs, Hs)) / (np.vdot(s, Hs))
         else:
             matrix_Hessian_next = matrix_Hessian
     
@@ -64,24 +67,24 @@ def my_gillmurr(A, tol):
     bet = np.sqrt(max_absdiag) + 0.1    #  will change
     
     #  Iterate
-    for k in range(1,n):
+    for k in range(0,n-1):
         l = k+1
-        gam = max(abs(B(k,l:-1)))
-        ro = sqrt(max([abs(B(k,k)), (gam/bet)**2, tol**2]))
-        R(k,k) = ro
-        E(k,k) = ro**2 - B(k,k)
+        gam = max(abs(B[k,l:-1]))
+        ro = np.sqrt(max([abs(B(k,k)), (gam/bet)**2, tol**2]))
+        R[k,k] = ro
+        E[k,k] = ro**2 - B[k,k]
         if ro < tol:
-            R(k,l:-1) = 0
+            R[k,l:-1] = 0
         else:
-            R(k,l:-1) = B(k,l:-1)/ro
+            R[k,l:-1] = B[k,l:-1]/ro
         
         
         #  Update the rest
-        B(l:,l:) = B(l:,l:) - R(k,l:)*R(k,l:) #todo transpose B(l:,l:) = B(l:,l:) - R(k,l:)'*R(k,l:)
+        B[l:,l:] = B[l:,l:] - np.dot(np.transpose(R[k,l:]),R[k,l:]) #todo transpose B(l:,l:) = B(l:,l:) - R(k,l:)'*R(k,l:)
     
     return [R, E]
 
-def mat_H_block(matrix_Hessian, blocks_OLD, s_v, y_v, statespace_dimension, number_of_segments, PROBLEM_FORMULATION):
+def mat_H_block(matrix_Hessian, blocks_OLD, s_v, y_v, statespace_dimension, number_of_segments):
     #  Function approximates the Hessian of the Lagrangian by BFGS method
     #  http:#en.wikipedia.org/wiki/BFGS_method
     #  This version keeps the sparsity of the Matrix matrix_Hessian. BFGS method is applied
@@ -94,8 +97,6 @@ def mat_H_block(matrix_Hessian, blocks_OLD, s_v, y_v, statespace_dimension, numb
     #      y_v = gxL(x_new, lam_new) - gxL(x_old, lam_new)
     #      statespace_dimension - dimension of the state space
     #      number_of_segments - number of segments
-    #      PROBLEM_FORMULATION - a switch between various formulation of the objective function f(x)
-    #          and the vectors of constraints c(x)
     
     #  OUTPUT:
     #      matrix_Hessian_new - a new Hessian approximation
@@ -110,57 +111,56 @@ def mat_H_block(matrix_Hessian, blocks_OLD, s_v, y_v, statespace_dimension, numb
     size_of_blocks = size(blocks_OLD, 2)
     
     #  We split vectors s and y = lag_grad_next-lag_grad into number_of_segments vectors, for we have number_of_segments blocks
-    if (PROBLEM_FORMULATION == 2):
-        #  Lengths are fixed => we have only Nn parameters
-        S = matrix(s_v, statespace_dimension, number_of_segments)
-        Y = matrix(y_v, statespace_dimension, number_of_segments)
-    else:
-        #  Lengths are not fixed => we have N(n+1) parameters
-        S = matrix(s_v, statespace_dimension+1, number_of_segments)
-        Y = matrix(y_v, statespace_dimension+1, number_of_segments)
+    #if (PROBLEM_FORMULATION == 2):
+    #    #  Lengths are fixed => we have only Nn parameters
+    #    S = matrix(s_v, statespace_dimension, number_of_segments)
+    #    Y = matrix(y_v, statespace_dimension, number_of_segments)
+    #else:
+    #    #  Lengths are not fixed => we have N(n+1) parameters
+    S = matrix(s_v, statespace_dimension+1, number_of_segments)
+    Y = matrix(y_v, statespace_dimension+1, number_of_segments)
     
 
     #  I update every blocks so that blocks_NEW = blocks_OLD + UPDATE
     if (number_of_blocks==1):
         #  This is the full BFGS update
-        [blocks_NEW] = mat_H(blocks_OLD, s_v, y_v);
+        [blocks_NEW] = mat_H(blocks_OLD, s_v, y_v)
         
         #  Construct the Hessian matrix for the KKT system
-        matrix_Hessian_new = blocks_NEW;
+        matrix_Hessian_new = blocks_NEW
 
     elif (number_of_blocks == number_of_segments):
         #  This is the block-diagonal update
         for i in range(number_of_blocks): #i = 1:number_of_blocks
             #  Extract one block
-            Hb = blocks_OLD(size_of_blocks*(i-1)+1:i*size_of_blocks, :)
+            Hb = blocks_OLD(size_of_blocks*(i-1)+1:i*size_of_blocks, :) #todo
             
             #  Block-wise BFGS
-            [Hb_update] = mat_H(Hb, S(:,i), Y(:,i))
+            [Hb_update] = mat_H(Hb, S[:,i], Y[:,i])
             blocks_NEW = [blocks_NEW, Hb_update]
             matrix_Hessian_new = sysdiag(matrix_Hessian_new, Hb_update)
         
 
     elif (number_of_blocks == number_of_segments-1):
         #  data
-        ZB_SMALL = zeros(size_of_blocks, size_of_blocks)
+        ZB_SMALL = np.zeros(size_of_blocks, size_of_blocks)
 
         #  This is the banded Hessian with width of the band 2*n or 2*(n+1)
         for i in range(number_of_blocks): #= 1:number_of_blocks
             #  Extract one block
-            Hb = blocks_OLD(size_of_blocks*(i-1) + 1: i*size_of_blocks, :)
+            Hb = blocks_OLD(size_of_blocks*(i-1) + 1: i*size_of_blocks, :) #todo
             
             #  Block-wise BFGS (overlapping blocks
-            [Hb_update] = mat_H(Hb, [S(:, i); S(:, i+1)], [Y(:, i); Y(:, i+1)])
+            [Hb_update] = mat_H(Hb, [[S[:, i]; S[:, i+1]], [Y[:, i], Y[:, i+1]]])
             blocks_NEW = [blocks_NEW, Hb_update]
-            ZB_BIG = zeros(size(matrix_Hessian_new, 1) - size_of_blocks/2, size(matrix_Hessian_new, 1) - size_of_blocks/2)
+            ZB_BIG = np.zeros(size(matrix_Hessian_new, 1) - size_of_blocks/2, size(matrix_Hessian_new, 1) - size_of_blocks/2)
             matrix_Hessian_new = sysdiag(matrix_Hessian_new, ZB_SMALL) + sysdiag(ZB_BIG, Hb_update)
-            ZB_SMALL = zeros(size_of_blocks/2, size_of_blocks/2)
+            ZB_SMALL = np.zeros(size_of_blocks/2, size_of_blocks/2)
         
     
     return [matrix_Hessian_new, blocks_NEW]
 
-function [Hess_new] = my_Hess_linode(lam, seg_init, seg_len,...
-                                    ode_A, cen_U, ell_I, ell_U, my_ode)
+def my_Hess_linode(lam, seg_init, seg_len, ode_A, cen_U, ell_I, ell_U, my_ode):
         #  This function approximates the Hessian of the Lagrangian using
         #  the structure and information I have at hand. I try to avoid
         #  using BFGS or any other for the Hessian approximation
@@ -169,28 +169,28 @@ function [Hess_new] = my_Hess_linode(lam, seg_init, seg_len,...
         
         
         #  initialize
-        [statespace_dim, number_of_seg] = size(seg_init);
-        AT_sqr = (ode_A*ode_A);
-        Hess_new = [];
-        lam_I = lam(1);
-        lam_U = lam($);
-        lambda = lam;
-        lambda(1) = [];
-        lambda($) = [];
-        D = zeros(statespace_dim, statespace_dim);
+        [statespace_dim, number_of_seg] = size(seg_init)
+        AT_sqr = (ode_A*ode_A)
+        Hess_new = []
+        lam_I = lam(0)
+        lam_U = lam(-1)
+        xambda = lam
+        xlambda[0] = []
+        xlambda[-1] = []
+        D = np.zeros(statespace_dim, statespace_dim)
                 
         #  iterate over blocks 1...number_of_seg
         #  the last update at the end
-        for k = 1:number_of_seg-1
+        for k = xrange(number_of_seg-2): #k=1:numberofseg-1
             #  get e**{At_i}**T
-            sen_mat = expm(ode_A*seg_len(k));
+            sen_mat = expm(ode_A*seg_len(k))
             #  stack mixed second derivatives (space-time)
             V_stack = -(ode_A*sen_mat)';
             #  stack second derivatives with respect to time
 #            alpha_stack = -seg_init(:,k)'*sen_mat*AT_sqr; --- # BAD
             alpha_stack = -AT_sqr*sen_mat*seg_init(:,k);
             #  perform the index contraction by lambda
-            v_i = V_stack*lambda((k-1)*statespace_dim+1:k*statespace_dim);
+            v_i = V_stack*xlambda((k-1)*statespace_dim+1:k*statespace_dim);
             alpha_i = alpha_stack'*lambda((k-1)*statespace_dim+1:k*statespace_dim);
             #  build the block of the Hessian matrix
             if k ==1 then
@@ -215,7 +215,7 @@ function [Hess_new] = my_Hess_linode(lam, seg_init, seg_len,...
         H_block = lam_U*[M, v_i; v_i', alpha_i]
         H_block($,$) = H_block($,$) + 1;
         Hess_new = sysdiag(Hess_new, H_block);
-endfunction
+        return [Hess_new]
 
 
 function [Hess_new, D_new] = my_Hess_nonlinode(lam, seg_init, seg_len, ode_A, D_old,...
