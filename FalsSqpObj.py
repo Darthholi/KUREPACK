@@ -10,17 +10,17 @@ class FalsSqpObj:
     self.object_fx = pobject_fx
     self.object_cx = pobject_cx
   def get_fcl(self,INITIAL_STATES_SEGMENTS,LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A,
-              FINITE_DIFFERENCE_SCHEME, ODE_LIST,xlambda):
+              FINITE_DIFFERENCE_SCHEME, xlambda):
     
     # Function evaluates the objective function fx, its gradient gfx,
     # vector of constraints cx, its Jacobian Bx
     # Lagrangian L and its gradient with respect to x gxL
     
     # objective function part
-    [fx, gfx] = self.object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST)
+    [fx, gfx] = self.object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME)
     
     # vector of constraints part
-    [cx, Bx, T] = self.const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST, ell_I, ell_U, cen_IU)
+    [cx, Bx, T] = self.const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ell_I, ell_U, cen_IU)
     
     # Lagrangian part
     [L, gxL] = self.lagrangian(fx, gfx, cx, Bx, xlambda)
@@ -120,7 +120,7 @@ class FalsSqpObj:
     sl_o = LENGTHS_SEGMENTS + xat[-1,:]
     return [si_o, sl_o]
   
-  def step(self,INITIAL_STATES_SEGMENTS, direction_x, xlambda, direction_lambda, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, TO_STOP,  ODE_LIST, MERIT_FUNCTION_SIGMA, mer_fun_val, mer_fun_grad):
+  def step(self,INITIAL_STATES_SEGMENTS, direction_x, xlambda, direction_lambda, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, TO_STOP, MERIT_FUNCTION_SIGMA, mer_fun_val, mer_fun_grad):
     #  Function computes the length of the step size_step so that x_new = x_old + size_step*direction_x
     #  The merit function we use is: 
     #  number_of_segments(size_step) = F(x+size_step*direction_x) + (lambda + direction_lambda)**T*c(x + size_step*direction_x) + (sigma/2)*||c(x + size_step*direction_x)||_2**2
@@ -142,7 +142,6 @@ class FalsSqpObj:
     #      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical 
     #          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
     #      TO_STOP - when to stop, TO_STOP = [stop_lag;stop_c;stop_it;stop_step]
-    #      ODE_LIST - a switch between dynamical systems; for testing
     #      MERIT_FUNCTION_SIGMA - a paramater forcing the constraint c(x) to be satisfied
     
     #  OUTPUT:    
@@ -164,8 +163,8 @@ class FalsSqpObj:
 
 #  FINISH
 #    #  evaluate F(x_old), gxF(x_old), c(x_old), B(x_old)
-#    [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
-#    [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST, ell_I, ell_U, cen_IU);
+#    [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME);
+#    [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ell_I, ell_U, cen_IU);
 #    #  value of the merit function in x_old, lam_n = lambda + direction_lambda
 #    [mer_fun_val] = merit_fcn(obj_fun_val, const_val, lambda + direction_lambda, MERIT_FUNCTION_SIGMA);
 #    #  gradient of the merit function in lam_n = lam_o + direction_lambda, x = x_old
@@ -183,8 +182,8 @@ class FalsSqpObj:
         #  evaluate merit function in x_new = x_old + size_step*direction_x, lambda + direction_lambda
         s_k = size_step*direction_x
         [new_seg_init, new_seg_length] = self.xt_from_s(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, s_k)
-        [obj_fun_val_next] = self.object_only_fx(new_seg_init, new_seg_length, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST)
-        [const_val_next] = self.const_only_cx(new_seg_init, new_seg_length, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST, ell_I, ell_U, cen_IU)
+        [obj_fun_val_next] = self.object_only_fx(new_seg_init, new_seg_length, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME)
+        [const_val_next] = self.const_only_cx(new_seg_init, new_seg_length, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ell_I, ell_U, cen_IU)
         [mer_fun_val_next] = self.merit_fcn(obj_fun_val_next, const_val_next, xlambda + direction_lambda, MERIT_FUNCTION_SIGMA)
         
         #  Check if we descend
@@ -198,7 +197,7 @@ class FalsSqpObj:
         
     return size_step
 
-  def fals_sqp(self,INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ODE_MATRIX_A, TO_STOP, FINITE_DIFFERENCE_SCHEME, ODE_LIST = None, MERIT_FUNCTION_SIGMA = None):
+  def fals_sqp(self,INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ODE_MATRIX_A, TO_STOP, FINITE_DIFFERENCE_SCHEME, MERIT_FUNCTION_SIGMA = None):
     #  Function runs the SQP algorithm
     
     #  INPUT:
@@ -214,7 +213,6 @@ class FalsSqpObj:
     #      ODE_MATRIX_A - a matrix that defines linear dynamics of the dynamical system
     #      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     #          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    #      ODE_LIST - a switch between dynamical systems; for testing
     #      MERIT_FUNCTION_SIGMA - a parameter enforcing c(x) = 0
     
     #  OUTPUT:
@@ -297,7 +295,7 @@ class FalsSqpObj:
             #  Get values of Fx fFx, cx, Bx, L , gxL
             [obj_fun_val, obj_fun_grad, const_val, const_Jac, lag_val, lag_grad] = self.get_fcl(si_o,
               sl_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A,
-              FINITE_DIFFERENCE_SCHEME, ODE_LIST, xlambda)
+              FINITE_DIFFERENCE_SCHEME, xlambda)
             
             #  rhs for the KKT
             rhs_b = [-lag_grad, -const_val]
@@ -343,7 +341,7 @@ class FalsSqpObj:
 #        disp(mer_fun_grad,"Mer fun grad");
 
         #  compute size_step, the length of a step
-        [size_step] = self.step(si_o, direction_x, xlambda, direction_xlambda, sl_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME, TO_STOP, ODE_LIST, MERIT_FUNCTION_SIGMA, mer_fun_val, mer_fun_grad)
+        [size_step] = self.step(si_o, direction_x, xlambda, direction_xlambda, sl_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME, TO_STOP, MERIT_FUNCTION_SIGMA, mer_fun_val, mer_fun_grad)
 #
 #
 #        #  Show the step-size
@@ -356,7 +354,7 @@ class FalsSqpObj:
         #  This is not necessary!!!! It is here just for me ;-)
 #        temp = [];
 #        for j = 1:number_of_segments-1
-#            [x_sen, x_end] = sen_init(si_o(:,j), sl_o(j), ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+#            [x_sen, x_end] = sen_init(si_o(:,j), sl_o(j), ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME);
 #            temp = [temp; cond(x_sen)];
 #        end
         
@@ -364,7 +362,7 @@ class FalsSqpObj:
         #  gradient of L(x_old, lam_new)
         [obj_fun_val, obj_fun_grad, const_val, const_Jac, lag_val, lag_grad] = self.get_fcl(si_o,
                                                                                        sl_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A,
-                                                                                       FINITE_DIFFERENCE_SCHEME, ODE_LIST, xlambda + size_step*direction_xlambda)
+                                                                                       FINITE_DIFFERENCE_SCHEME, xlambda + size_step*direction_xlambda)
 
         #  gradient of L(x_new, lam_new)
         [si_o, sl_o] = self.xt_from_s(si_o, sl_o, s_k)
@@ -372,7 +370,7 @@ class FalsSqpObj:
         [obj_fun_val_next, obj_fun_grad_next, const_val_next,
          const_Jac_next, lag_val_next, lag_grad_next] = self.get_fcl(si_o,
                                                                 sl_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A,
-                                                                FINITE_DIFFERENCE_SCHEME, ODE_LIST,
+                                                                FINITE_DIFFERENCE_SCHEME,
                                                                 xlambda + size_step*direction_xlambda)
 
 #        #  data for investigation
@@ -412,11 +410,11 @@ class FalsSqpObj:
         elif (Hessian_computation == "MyHessLin"):
             #  MY HESSIAN APPROXIMATION SCHEME - analytic formulae
             [matrix_Hessian] = hmat.my_Hess_linode(xlambda, si_o, sl_o,
-                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U, ODE_LIST)
+                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U)
         elif (Hessian_computation == "MyHessLinGM"):
             #  MY HESSIAN APPROXIMATION SCHEME for lin ODE's + G-M update
             [matrix_Hessian] = hmat.my_Hess_linode(xlambda, si_o, sl_o,
-                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U, ODE_LIST)
+                                                    ODE_MATRIX_A, cen_IU[:,1], ell_I, ell_U)
             [R, E] = hmat.my_gillmurr(matrix_Hessian, np.sqrt(epsconst))
             matrix_Hessian = matrix_Hessian + E
         elif (Hessian_computation == "MyHessNonLin"):
@@ -425,8 +423,8 @@ class FalsSqpObj:
                 Hb_old = np.tile(np.eye(statespace_dimension, statespace_dimension), (number_of_segments, 1))
             
             [matrix_Hessian, Hb_new] = hmat.my_Hess_nonlinode(xlambda, si_o, sl_o, ODE_MATRIX_A, Hb_old,
-                                                               s_k, lag_grad_next - lag_grad, cen_U, ell_I, ell_U,
-                                                         ODE_LIST, FINITE_DIFFERENCE_SCHEME)
+                                                              s_k, lag_grad_next - lag_grad, cen_U, ell_I, ell_U,
+                                                              FINITE_DIFFERENCE_SCHEME)
             Hb_old = Hb_new
         elif (Hessian_computation == "BlockApproxGM"):
             #  Block Hessian approximation by (BFGS, DBFGS, SR1)
@@ -442,7 +440,7 @@ class FalsSqpObj:
             #  !!!!! Very expensive    !!!!!!!
             funkce = list(self.lagrangian_complet, statespace_dimension, number_of_segments, #todo list python?
                           xlambda + size_step*direction_xlambda, ell_I, ell_U, cen_IU, ODE_MATRIX_A,
-                                 FINITE_DIFFERENCE_SCHEME, ODE_LIST)
+                                 FINITE_DIFFERENCE_SCHEME)
             sol = np.matrix([si_o, sl_o], number_of_segments*(statespace_dimension +1), 1)
             [grad_L_opt, matrix_Hessian] = numderivative(funkce, sol, [], [], "blockmat") #todo numderivative
         else:
@@ -453,7 +451,7 @@ class FalsSqpObj:
 ##      Hessian computation by the finite difference scheme "VERY EXPENSIVE"
 #        funkce = list(lagrangian_complet, statespace_dimension, number_of_segments,...
 #                 xlambda + size_step*direction_xlambda, ell_I, ell_U, cen_IU, ODE_MATRIX_A, ...
-#                FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+#                FINITE_DIFFERENCE_SCHEME);
 #        sol = matrix([si_o; sl_o], number_of_segments*(statespace_dimension +1), 1);
 #        [grad_L, matrix_Hessian] = numderivative(funkce, sol, [], [], "blockmat");
 
@@ -497,9 +495,9 @@ class FalsSqpObj:
         #  Get the value of the objective function f_I + f_U
         v = si_op[:,0] - cen_IU[:,0]
         f_I = [f_I, v*ell_I*v] #v**T*ell_I*v #todo transpose
-#        my_ode = list(ode_lin, ODE_MATRIX_A, ODE_LIST(1));
+#        my_ode = list(ode_lin, ODE_MATRIX_A);
 #        X = ode(si_o(:,$), 0, sl_o($), my_ode);
-        [X, flag] = ode_simul(si_o[:,-1], sl_o[-1],ODE_LIST, ODE_MATRIX_A, 0)
+        [X, flag] = ode_simul(si_o[:,-1], sl_o[-1], ODE_MATRIX_A, 0)
         v = X - cen_IU[:,-1]
         f_U = [f_U, v*ell_U*v] #v**T *ell_U*v #todo transpose
         of = [f_I, f_U]
@@ -524,7 +522,7 @@ class FalsSqpObj:
 #        #  Display the iteration number
 #        disp(i,"Iteration No.")
 #        #  Draw segments
-#        dummy = draw_segments(si_o, sl_o, i, [1 2], ODE_LIST,...
+#        dummy = draw_segments(si_o, sl_o, i, [1 2],...
 #                ODE_MATRIX_A, 0)
         
         
@@ -554,7 +552,7 @@ class FalsSqpObj:
 #            [statespace_dimension, number_of_segments] = size(si_o);
 #            lambd = xlambda;
 #            x = matrix(x, number_of_segments*(statespace_dimension+1), 1);
-#            fce = list(lagrangian_complet, statespace_dimension, number_of_segments, lambd, ell_I, ell_U, cen_IU, ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+#            fce = list(lagrangian_complet, statespace_dimension, number_of_segments, lambd, ell_I, ell_U, cen_IU, ODE_MATRIX_A, FINITE_DIFFERENCE_SCHEME);
 #            [J_o, H_o] = numderivative(fce, x);
 #            H_o = matrix(H_o, (statespace_dimension+1)*number_of_segments, (statespace_dimension+1)*number_of_segments);
 #            H_o = Q'*H_o*Q;
@@ -589,7 +587,7 @@ class FalsSqpObj:
 #    kerBT = kernel(const_Jac_next');
 #    funkce = list(lagrangian_complet, statespace_dimension, number_of_segments,...
 #                 lam_o, ell_I, ell_U, cen_IU, ODE_MATRIX_A, ...
-#                FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+#                FINITE_DIFFERENCE_SCHEME);
 #    sol = matrix([si_o; sl_o], number_of_segments*(statespace_dimension +1), 1);
 #    [grad_L, Hess_L] = numderivative(funkce, sol, [], [], "blockmat");
 #    Hess_L_proj = kerBT'*Hess_L*kerBT;
@@ -615,7 +613,6 @@ class FalsSqpObj:
     #      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
     #      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     #          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    #      ODE_LIST - a switch between dynamical systems; for testing
     
     #  OUTPUT:
     #      direction_x - a direction so that x_new = x_old + alpha*d_x
@@ -686,7 +683,7 @@ class FalsSqpObj:
 
 
 """
-function [dummy] = draw_segments(seg_i, seg_l, num_fig, which_dim, ode_list, ode_A, sen)
+function [dummy] = draw_segments(seg_i, seg_l, num_fig, which_dim, ode_A, sen)
     #  This function plots segments in a figure denoted by num_fig
     #  It returns 2D plot, so in which_sim there is marked what components
     #  one intends to draw.
@@ -698,7 +695,7 @@ function [dummy] = draw_segments(seg_i, seg_l, num_fig, which_dim, ode_list, ode
     
     for j = 1:length(seg_l)
         #  solve ODE
-        [X, flag] = ode_simul_show(seg_i(:,j), seg_l(j), ode_list, ode_A, sen);
+        [X, flag] = ode_simul_show(seg_i(:,j), seg_l(j), ode_A, sen);
         scf(num_fig)
         plot2d(X(which_dim(1),:), X(which_dim($),:));
         a = gca();
@@ -720,7 +717,7 @@ endfunction
 """
 
 """
-function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST, ell_I, ell_U, cen_IU)
+function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ell_I, ell_U, cen_IU)
     #  Function evaluates the vector of constraints c(x), Jacobian of constraints
     #  B(x) = [gxc(x)_1, ... , gxc(x)_m-1]. A matrix T is a transformation matrix
     
@@ -732,7 +729,6 @@ function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, 
     #      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
     #      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     #          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    #      ODE_LIST - a switch between dynamical systems; for testing
     #      ell_I - a SPD matrix giving the shape of the ellipsoid of the
     #              initial states I
     #      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
@@ -749,7 +745,7 @@ function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, 
     [statespace_dimension, number_of_segments] = size(INITIAL_STATES_SEGMENTS)
     const_val = [];
     
-    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1))
+    my_ode = list(ode_lin, ode_matrix_A)
     
     
     #  f(x) = \sum t_i**2;
@@ -760,7 +756,7 @@ function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, 
     #  Data for c(x), B(x) and T
     for i = 1:number_of_segments-1
         [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i),...
-                             ODE_LIST, ode_matrix_A, 0)
+                             ode_matrix_A, 0)
 #            [x_end] = ode(INITIAL_STATES_SEGMENTS(:,i), 0, LENGTHS_SEGMENTS(i), my_ode);
         const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
     end
@@ -769,14 +765,14 @@ function [const_val] = const_only_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, 
     #  I need to add two more scalar constraints
     u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
     [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
-                             ODE_LIST, ode_matrix_A, 0);
+                             ode_matrix_A, 0);
 #        [x_end] = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
     v = x_end - cen_IU(:,$);
     const_val = [0.5*(u'*ell_I*u - 1); const_val; 0.5*(v'*ell_U*v - 1)];
     
 endfunction 
 
-function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST, ell_I, ell_U, cen_IU)
+function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ell_I, ell_U, cen_IU)
     //  Function evaluates the vector of constraints c(x), Jacobian of constraints
     //  B(x) = [gxc(x)_1, ... , gxc(x)_m-1]. A matrix T is a transformation matrix
     
@@ -788,7 +784,6 @@ function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_S
     //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
     //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    //      ODE_LIST - a switch between dynamical systems; for testing
     //      ell_I - a SPD matrix giving the shape of the ellipsoid of the
     //              initial states I
     //      ell_U - a SPD matrix giving shape of the ellipsoid of the unsafe
@@ -824,11 +819,11 @@ function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_S
     
     //  Data for c(x), B(x) and T
     for i = 1:number_of_segments-1
-    [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+    [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,i), LENGTHS_SEGMENTS(i), ode_matrix_A, FINITE_DIFFERENCE_SCHEME);
     const_val = [const_val; INITIAL_STATES_SEGMENTS(:,i+1) - x_end];
     
     //  get dx/dt in x_end
-    dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+    dxdt = ode_rhs(x_end, ode_matrix_A);
     Sx = sysdiag(Sx, [-x_sen'; -dxdt']);
     Sd = sysdiag(Sd, [zeros(1, statespace_dimension); eye(statespace_dimension, statespace_dimension)]);
 //        //I do not need this here
@@ -843,8 +838,8 @@ function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_S
     //  I need to add two more scalar constraints
     [k, l] = size(const_Jac);
     u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
-    [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
-    dxdt = ode_rhs(x_end, ode_matrix_A, ODE_LIST(1));
+    [x_sen, x_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME);
+    dxdt = ode_rhs(x_end, ode_matrix_A);
     v = x_end - cen_IU(:,$);
     
     //  Single/Multiple shooting case
@@ -863,7 +858,7 @@ function [const_val, const_Jac, T] = const_cx(INITIAL_STATES_SEGMENTS, LENGTHS_S
     
 endfunction
 
-function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST)
+function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME)
     //  Function evaluates the objective function F(x) and its gradient gxF(x)
     
     //  INPUT:
@@ -879,7 +874,6 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
     //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
     //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    //      ODE_LIST - a switch between dynamical systems; for testing
     
     //  OUTPUT:
     //      obj_fun_val - objective function F(x)
@@ -894,7 +888,7 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
     obj_fun_grad = [];
     
     //  Set the dynamics
-    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1));
+    my_ode = list(ode_lin, ode_matrix_A);
     
     //  Compute f_I
     u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
@@ -958,7 +952,7 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
         ic = [INITIAL_STATES_SEGMENTS(:,$), ic_f, ic_b];
         X = [];
         for i = 1:size(ic, 2)
-            [sol, flag] = ode_simul(ic(:,i), LENGTHS_SEGMENTS($), ODE_LIST, ode_matrix_A, 0);
+            [sol, flag] = ode_simul(ic(:,i), LENGTHS_SEGMENTS($), ode_matrix_A, 0);
             X = [X sol];
         end
         //==================================================================================
@@ -992,7 +986,7 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
         X = [];
         t_int = [LENGTHS_SEGMENTS($), LENGTHS_SEGMENTS($) + delta_t, LENGTHS_SEGMENTS($) - delta_t];
         for i = 1:length(t_int)
-            [sol, flag] = ode_simul(ic, t_int(i), ODE_LIST, ode_matrix_A, 0);
+            [sol, flag] = ode_simul(ic, t_int(i), ode_matrix_A, 0);
             X = [X sol];
         end
         //==================================================================================
@@ -1012,13 +1006,13 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
         
         //  gfx_U and f_U
         [S_end, X_end] = sen_init(INITIAL_STATES_SEGMENTS(:,$),...
-        LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST);
+        LENGTHS_SEGMENTS($), ode_matrix_A, FINITE_DIFFERENCE_SCHEME);
         v = X_end - cen_IU(:,$);
         f_U = 0.5*v'*ell_U*v;
         gfx_U = S_end'*ell_U*v
         
         //  gfx_t
-        dxdt = ode_rhs(X_end, ode_matrix_A, ODE_LIST(1));
+        dxdt = ode_rhs(X_end, ode_matrix_A);
         gfx_t = v'*ell_U*dxdt;
         
     else
@@ -1043,7 +1037,7 @@ function [obj_fun_val, obj_fun_grad] = object_fx(INITIAL_STATES_SEGMENTS, LENGTH
     
 endfunction
 
-function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME, ODE_LIST)
+function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENTS, ell_I, ell_U, cen_IU, ode_matrix_A, FINITE_DIFFERENCE_SCHEME)
     //  Function evaluates the objective function F(x) and its gradient gxF(x)
     
     //  INPUT:
@@ -1059,7 +1053,6 @@ function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENT
     //      ode_matrix_A - a matrix that defines linear dynamics of the dynamical system
     //      FINITE_DIFFERENCE_SCHEME - a switch between forward and central difference for numerical
     //          differentiantion; FINITE_DIFFERENCE_SCHEME = 1/2 = forward/central
-    //      ODE_LIST - a switch between dynamical systems; for testing
     
     //  OUTPUT:
     //      obj_fun_val - objective function F(x)
@@ -1073,7 +1066,7 @@ function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENT
     sen = 0;    //  0/1 sensitivity computation YES/NO
     
     //  Set the dynamics
-//    my_ode = list(ode_lin, ode_matrix_A, ODE_LIST(1));
+//    my_ode = list(ode_lin, ode_matrix_A);
     
     //  Compute f_I
     u = INITIAL_STATES_SEGMENTS(:,1) - cen_IU(:,1);
@@ -1081,7 +1074,7 @@ function [obj_fun_val] = object_only_fx(INITIAL_STATES_SEGMENTS, LENGTHS_SEGMENT
     
     //  Compute f_U
     [x_end, flag] = ode_simul(INITIAL_STATES_SEGMENTS(:,$), LENGTHS_SEGMENTS($),...
-                             ODE_LIST, ode_matrix_A, sen);
+                             ode_matrix_A, sen);
 //    x_end = ode(INITIAL_STATES_SEGMENTS(:,$), 0, LENGTHS_SEGMENTS($), my_ode);
     v = x_end - cen_IU(:,$);
     f_U = 0.5*v'*ell_U*v;
